@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.whisper-fedora</id>
+  <name>Whisper Fedora</name>
+  <summary>Speech-to-text transcription using OpenAI Whisper</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Whisper Fedora is a modern desktop application for transcribing audio and
+      video files using OpenAI's Whisper speech recognition model via whisper.cpp.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Drag-and-drop file upload for audio and video files</li>
+      <li>Multiple Whisper models (tiny to large)</li>
+      <li>99+ language support with auto-detection</li>
+      <li>Translation to English</li>
+      <li>GPU acceleration (CUDA/ROCm) with CPU fallback</li>
+      <li>Export to TXT, SRT, VTT, and JSON formats</li>
+      <li>Modern dark theme interface</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">whisper-fedora.desktop</launchable>
+  <url type="homepage">https://github.com/whisper-fedora</url>
+  <provides>
+    <binary>whisper-fedora</binary>
+  </provides>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="1.0.0" date="2026-01-14">
+      <description>
+        <p>Initial release with full transcription support.</p>
+      </description>
+    </release>
+  </releases>
+</component>
