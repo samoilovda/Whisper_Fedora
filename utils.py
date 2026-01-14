@@ -3,6 +3,7 @@ Whisper Fedora UI - Utility Functions
 """
 
 import os
+import platform
 import subprocess
 import shutil
 from typing import Optional, Tuple
@@ -61,7 +62,7 @@ def detect_gpu() -> Tuple[str, str]:
     """
     Detect available GPU acceleration.
     Returns: (gpu_type, description)
-    - gpu_type: 'cuda', 'rocm', or 'cpu'
+    - gpu_type: 'cuda', 'rocm', 'metal', or 'cpu'
     """
     # Check for NVIDIA CUDA
     if shutil.which('nvidia-smi'):
@@ -90,6 +91,20 @@ def detect_gpu() -> Tuple[str, str]:
                         gpu_name = line.split(':')[1].strip()
                         return ('rocm', f"AMD {gpu_name}")
                 return ('rocm', "AMD GPU (ROCm)")
+        except (subprocess.TimeoutExpired, Exception):
+            pass
+    
+    # Check for Apple Metal (macOS with Apple Silicon)
+    if platform.system() == 'Darwin':
+        try:
+            result = subprocess.run(
+                ['sysctl', '-n', 'machdep.cpu.brand_string'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                chip_name = result.stdout.strip()
+                if 'Apple' in chip_name:
+                    return ('metal', f"Apple Metal ({chip_name})")
         except (subprocess.TimeoutExpired, Exception):
             pass
     
@@ -128,11 +143,12 @@ def get_models_dir() -> str:
 # Available Whisper models
 WHISPER_MODELS = [
     ('tiny', 'Tiny (~75MB) - Fastest, lowest accuracy'),
-    ('base', 'Base (~142MB) - Fast, good for most uses'),
+    ('base', 'Base (~142MB) - Good for most uses'),
     ('small', 'Small (~466MB) - Balanced speed/accuracy'),
     ('medium', 'Medium (~1.5GB) - High accuracy'),
-    ('large', 'Large (~3GB) - Highest accuracy'),
-    ('turbo', 'Turbo - Optimized for speed'),
+    ('large-v3', 'Large v3 (~3GB) - Highest accuracy'),
+    ('large-v3-turbo', 'Turbo (~1.6GB) - Fast, high accuracy'),
+    ('large-v3-turbo-q5_0', 'Turbo Q5 (~809MB) - Optimized turbo'),
 ]
 
 # Supported languages (subset of most common)

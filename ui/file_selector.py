@@ -95,8 +95,14 @@ class FileSelector(QWidget):
         # Selected file info (hidden initially)
         self.file_info = QWidget()
         self.file_info.setVisible(False)
+        self.file_info.setStyleSheet("""
+            QWidget {
+                background-color: rgba(99, 102, 241, 0.1);
+                border-radius: 8px;
+            }
+        """)
         file_info_layout = QHBoxLayout(self.file_info)
-        file_info_layout.setContentsMargins(8, 8, 8, 8)
+        file_info_layout.setContentsMargins(12, 10, 12, 10)
         
         self.file_name_label = QLabel()
         self.file_name_label.setStyleSheet("font-weight: bold;")

@@ -49,6 +49,7 @@ class TranscriptionWorker(QThread):
         model_name: str,
         language: str = 'auto',
         translate: bool = False,
+        n_threads: int = 4,
         parent: Optional[QObject] = None
     ):
         super().__init__(parent)
@@ -56,6 +57,7 @@ class TranscriptionWorker(QThread):
         self.model_name = model_name
         self.language = language
         self.translate = translate
+        self.n_threads = n_threads
         self._cancelled = threading.Event()
     
     def cancel(self):
@@ -85,13 +87,9 @@ class TranscriptionWorker(QThread):
             
             self.progress.emit(15, "Preparing transcription...")
             
-            # Configure transcription parameters
-            n_threads = os.cpu_count() or 4
-            # Use half the cores for better system responsiveness
-            n_threads = max(2, n_threads // 2)
-            
+            # Use thread count from settings
             params = {
-                'n_threads': n_threads,
+                'n_threads': self.n_threads,
             }
             
             # Set language if not auto-detect
@@ -165,6 +163,7 @@ class Transcriber:
         model_name: str,
         language: str = 'auto',
         translate: bool = False,
+        n_threads: int = 4,
         on_progress: Optional[Callable[[int, str], None]] = None,
         on_finished: Optional[Callable[[TranscriptionResult], None]] = None,
         on_error: Optional[Callable[[str], None]] = None
@@ -177,6 +176,7 @@ class Transcriber:
             model_name: Whisper model name (tiny, base, small, medium, large, turbo)
             language: Language code or 'auto' for auto-detection
             translate: If True, translate to English
+            n_threads: Number of CPU threads to use
             on_progress: Callback for progress updates (percentage, message)
             on_finished: Callback when transcription completes
             on_error: Callback for errors
@@ -194,7 +194,8 @@ class Transcriber:
             filepath=filepath,
             model_name=model_name,
             language=language,
-            translate=translate
+            translate=translate,
+            n_threads=n_threads
         )
         
         # Connect signals

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Whisper Fedora UI - Main Entry Point
+Whisper UI - Main Entry Point
 A modern desktop transcription application using whisper.cpp
 """
 
@@ -23,8 +23,8 @@ def main():
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
     
     app = QApplication(sys.argv)
-    app.setApplicationName("Whisper Fedora")
-    app.setApplicationDisplayName("Whisper Fedora")
+    app.setApplicationName("Whisper UI")
+    app.setApplicationDisplayName("Whisper UI")
     
     # Set modern font
     font = QFont("Inter", 10)

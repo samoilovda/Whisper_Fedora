@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
     
     def _setup_ui(self):
         """Set up the main window UI."""
-        self.setWindowTitle("Whisper Fedora")
+        self.setWindowTitle("Whisper UI")
         self.setMinimumSize(1000, 700)
         self.resize(1200, 800)
         
@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         title_text_layout.setContentsMargins(0, 0, 0, 0)
         title_text_layout.setSpacing(0)
         
-        title = QLabel("Whisper Fedora")
+        title = QLabel("Whisper UI")
         title.setStyleSheet("font-size: 20px; font-weight: bold;")
         title_text_layout.addWidget(title)
         
@@ -210,6 +210,7 @@ class MainWindow(QMainWindow):
                 color: #f87171;
             }
         """)
+        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_btn.clicked.connect(self._cancel_transcription)
         layout.addWidget(self.cancel_btn)
         
@@ -236,6 +237,7 @@ class MainWindow(QMainWindow):
                 color: #666;
             }
         """)
+        self.transcribe_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.transcribe_btn.clicked.connect(self._start_transcription)
         layout.addWidget(self.transcribe_btn)
         
@@ -273,6 +275,7 @@ class MainWindow(QMainWindow):
         model = self.settings_panel.get_model()
         language = self.settings_panel.get_language()
         translate = self.settings_panel.get_translate()
+        n_threads = self.settings_panel.get_thread_count()
         
         # Start transcription
         self.transcriber.transcribe(
@@ -280,6 +283,7 @@ class MainWindow(QMainWindow):
             model_name=model,
             language=language,
             translate=translate,
+            n_threads=n_threads,
             on_progress=self._on_progress,
             on_finished=self._on_finished,
             on_error=self._on_error

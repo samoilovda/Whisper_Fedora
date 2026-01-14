@@ -3,6 +3,7 @@ Whisper Fedora UI - Settings Panel
 Model, language, compute device, and output format settings
 """
 
+import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QCheckBox, QGroupBox, QFormLayout
@@ -100,6 +101,8 @@ class SettingsPanel(QWidget):
             self.device_combo.addItem(f"🚀 {gpu_name}", 'cuda')
         elif gpu_type == 'rocm':
             self.device_combo.addItem(f"🚀 {gpu_name}", 'rocm')
+        elif gpu_type == 'metal':
+            self.device_combo.addItem(f"🍎 {gpu_name}", 'metal')
         self.device_combo.addItem("💻 CPU", 'cpu')
         
         self.device_combo.currentIndexChanged.connect(self._on_settings_changed)
@@ -132,6 +135,29 @@ class SettingsPanel(QWidget):
         
         layout.addWidget(output_group)
         
+        # Performance mode group
+        perf_group = QGroupBox("Performance")
+        perf_group.setStyleSheet(model_group.styleSheet())
+        perf_layout = QFormLayout(perf_group)
+        perf_layout.setContentsMargins(16, 20, 16, 16)
+        
+        self.performance_combo = QComboBox()
+        self.performance_combo.setStyleSheet(self.model_combo.styleSheet())
+        self.performance_combo.addItem("🔥 Maximum (fastest, more heat)", 'max')
+        self.performance_combo.addItem("⚖️ Balanced (recommended)", 'balanced')
+        self.performance_combo.addItem("🌿 Efficiency (cooler, slower)", 'efficiency')
+        self.performance_combo.setCurrentIndex(1)  # Default to Balanced
+        self.performance_combo.currentIndexChanged.connect(self._on_settings_changed)
+        self.performance_combo.currentIndexChanged.connect(self._update_performance_info)
+        perf_layout.addRow("Mode:", self.performance_combo)
+        
+        self.performance_info = QLabel()
+        self.performance_info.setStyleSheet("color: #888; font-size: 11px;")
+        self._update_performance_info()
+        perf_layout.addRow("", self.performance_info)
+        
+        layout.addWidget(perf_group)
+        
         # Spacer
         layout.addStretch()
     
@@ -146,6 +172,8 @@ class SettingsPanel(QWidget):
             self.device_info.setText("Using NVIDIA CUDA for GPU acceleration")
         elif device == 'rocm':
             self.device_info.setText("Using AMD ROCm for GPU acceleration")
+        elif device == 'metal':
+            self.device_info.setText("Using Apple Metal for GPU acceleration")
         else:
             self.device_info.setText("Using CPU (slower but compatible)")
     
@@ -168,3 +196,34 @@ class SettingsPanel(QWidget):
     def get_export_format(self) -> str:
         """Get selected export format."""
         return self.format_combo.currentData()
+    
+    def get_performance_mode(self) -> str:
+        """Get selected performance mode."""
+        return self.performance_combo.currentData()
+    
+    def get_thread_count(self) -> int:
+        """Get thread count based on performance mode."""
+        cpu_count = os.cpu_count() or 4
+        mode = self.get_performance_mode()
+        
+        if mode == 'max':
+            return cpu_count  # Use all cores
+        elif mode == 'balanced':
+            return max(2, cpu_count // 2)  # Half the cores
+        else:  # efficiency
+            return max(1, cpu_count // 4)  # Quarter of cores
+    
+    def _update_performance_info(self):
+        """Update performance info label."""
+        mode = self.performance_combo.currentData()
+        cpu_count = os.cpu_count() or 4
+        
+        if mode == 'max':
+            threads = cpu_count
+            self.performance_info.setText(f"Using all {threads} CPU threads (fastest)")
+        elif mode == 'balanced':
+            threads = max(2, cpu_count // 2)
+            self.performance_info.setText(f"Using {threads} of {cpu_count} threads (recommended)")
+        else:  # efficiency
+            threads = max(1, cpu_count // 4)
+            self.performance_info.setText(f"Using {threads} of {cpu_count} threads (cooler)")

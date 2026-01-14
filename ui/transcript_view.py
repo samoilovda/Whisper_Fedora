@@ -64,6 +64,7 @@ class TranscriptView(QWidget):
                 background-color: rgba(99, 102, 241, 0.1);
             }
         """)
+        self.timestamps_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.timestamps_btn.clicked.connect(self._toggle_timestamps)
         header_layout.addWidget(self.timestamps_btn)
         
@@ -83,6 +84,7 @@ class TranscriptView(QWidget):
                 background-color: rgba(99, 102, 241, 0.1);
             }
         """)
+        self.copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.copy_btn.clicked.connect(self.copy_requested.emit)
         header_layout.addWidget(self.copy_btn)
         
@@ -101,6 +103,7 @@ class TranscriptView(QWidget):
                 background-color: #818cf8;
             }
         """)
+        self.export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.export_btn.clicked.connect(self.export_requested.emit)
         header_layout.addWidget(self.export_btn)
         
