@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
 from utils import is_supported_format, SUPPORTED_FORMATS, get_audio_duration, format_duration
+from ui.icons import IconLabel, get_icon, IconColors
 
 
 class FileSelector(QWidget):
@@ -50,11 +51,9 @@ class FileSelector(QWidget):
         drop_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         drop_layout.setSpacing(16)
         
-        # Icon label
-        self.icon_label = QLabel("🎵")
-        self.icon_label.setStyleSheet("font-size: 48px;")
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        drop_layout.addWidget(self.icon_label)
+        # Vector icon label
+        self.icon_label = IconLabel('music', IconColors.DEFAULT, 48)
+        drop_layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
         
         # Text label
         self.text_label = QLabel("Drop audio or video file here")
@@ -104,25 +103,29 @@ class FileSelector(QWidget):
         file_info_layout = QHBoxLayout(self.file_info)
         file_info_layout.setContentsMargins(12, 10, 12, 10)
         
+        # File icon
+        self.file_icon = IconLabel('file', IconColors.PRIMARY, 18)
+        file_info_layout.addWidget(self.file_icon)
+        
         self.file_name_label = QLabel()
-        self.file_name_label.setStyleSheet("font-weight: bold;")
+        self.file_name_label.setStyleSheet("font-weight: bold; margin-left: 8px;")
         file_info_layout.addWidget(self.file_name_label, stretch=1)
         
         self.file_duration_label = QLabel()
         self.file_duration_label.setStyleSheet("color: #888;")
         file_info_layout.addWidget(self.file_duration_label)
         
-        self.clear_btn = QPushButton("✕")
+        self.clear_btn = QPushButton()
+        self.clear_btn.setIcon(get_icon('close', IconColors.DEFAULT, 14))
         self.clear_btn.setFixedSize(24, 24)
         self.clear_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #888;
-                font-size: 14px;
             }
             QPushButton:hover {
-                color: #f87171;
+                background: rgba(248, 113, 113, 0.1);
+                border-radius: 12px;
             }
         """)
         self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -206,7 +209,7 @@ class FileSelector(QWidget):
         
         # Update display
         filename = os.path.basename(filepath)
-        self.file_name_label.setText(f"📄 {filename}")
+        self.file_name_label.setText(filename)
         
         # Get duration if possible
         duration = get_audio_duration(filepath)
@@ -215,10 +218,10 @@ class FileSelector(QWidget):
         else:
             self.file_duration_label.setText("")
         
-        # Show file info, update drop zone
+        # Show file info, update drop zone with success state
         self.file_info.setVisible(True)
-        self.icon_label.setText("✓")
-        self.icon_label.setStyleSheet("font-size: 48px; color: #22c55e;")
+        self.icon_label.set_icon('check_circle')
+        self.icon_label.set_color(IconColors.SUCCESS)
         self.text_label.setText("File ready for transcription")
         self.text_label.setStyleSheet("color: #22c55e; font-size: 14px;")
         
@@ -229,8 +232,8 @@ class FileSelector(QWidget):
         """Clear the current selection."""
         self.selected_file = None
         self.file_info.setVisible(False)
-        self.icon_label.setText("🎵")
-        self.icon_label.setStyleSheet("font-size: 48px;")
+        self.icon_label.set_icon('music')
+        self.icon_label.set_color(IconColors.DEFAULT)
         self.text_label.setText("Drop audio or video file here")
         self.text_label.setStyleSheet("color: #888; font-size: 14px;")
     

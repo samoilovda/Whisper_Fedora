@@ -12,6 +12,7 @@ from PyQt6.QtGui import QFont
 
 from transcriber import TranscriptionResult
 from utils import format_timestamp_vtt
+from ui.icons import get_icon, IconColors
 
 
 class TranscriptView(QWidget):
@@ -44,8 +45,9 @@ class TranscriptView(QWidget):
         
         header_layout.addStretch()
         
-        # Toggle timestamps button
-        self.timestamps_btn = QPushButton("🕐 Timestamps")
+        # Toggle timestamps button with vector icon
+        self.timestamps_btn = QPushButton("Timestamps")
+        self.timestamps_btn.setIcon(get_icon('clock', IconColors.DEFAULT, 14))
         self.timestamps_btn.setCheckable(True)
         self.timestamps_btn.setChecked(True)
         self.timestamps_btn.setStyleSheet("""
@@ -68,8 +70,9 @@ class TranscriptView(QWidget):
         self.timestamps_btn.clicked.connect(self._toggle_timestamps)
         header_layout.addWidget(self.timestamps_btn)
         
-        # Copy button
-        self.copy_btn = QPushButton("📋 Copy")
+        # Copy button with vector icon
+        self.copy_btn = QPushButton("Copy")
+        self.copy_btn.setIcon(get_icon('clipboard', IconColors.DEFAULT, 14))
         self.copy_btn.setStyleSheet("""
             QPushButton {
                 background: transparent;
@@ -88,8 +91,9 @@ class TranscriptView(QWidget):
         self.copy_btn.clicked.connect(self.copy_requested.emit)
         header_layout.addWidget(self.copy_btn)
         
-        # Export button
-        self.export_btn = QPushButton("💾 Export")
+        # Export button with vector icon
+        self.export_btn = QPushButton("Export")
+        self.export_btn.setIcon(get_icon('save', IconColors.WHITE, 14))
         self.export_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6366f1;

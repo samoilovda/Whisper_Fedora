@@ -5,6 +5,9 @@ Wrapper for pywhispercpp to handle transcription tasks
 
 import os
 import threading
+import tempfile
+import subprocess
+import shutil
 from dataclasses import dataclass
 from typing import Callable, Optional, List
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
@@ -12,6 +15,42 @@ from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from pywhispercpp.model import Model
 
 from utils import get_models_dir, detect_gpu
+
+
+def _convert_to_wav(input_path: str) -> Optional[str]:
+    """
+    Convert audio/video file to WAV format using FFmpeg.
+    Returns path to temporary WAV file, or None if FFmpeg not available.
+    """
+    if not shutil.which('ffmpeg'):
+        return None
+    
+    # Create temporary file
+    temp_dir = tempfile.gettempdir()
+    base_name = os.path.splitext(os.path.basename(input_path))[0]
+    output_path = os.path.join(temp_dir, f"{base_name}_whisper_temp.wav")
+    
+    try:
+        # Convert to 16kHz mono WAV (optimal for Whisper)
+        result = subprocess.run([
+            'ffmpeg', '-y', '-i', input_path,
+            '-ar', '16000',  # 16kHz sample rate
+            '-ac', '1',       # Mono
+            '-c:a', 'pcm_s16le',  # 16-bit PCM
+            output_path
+        ], capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0 and os.path.exists(output_path):
+            return output_path
+    except (subprocess.TimeoutExpired, Exception):
+        pass
+    
+    return None
+
+
+# Formats that need FFmpeg conversion
+FORMATS_NEEDING_CONVERSION = {'.m4a', '.aac', '.wma', '.opus', '.ogg', '.flac', 
+                               '.mp4', '.mkv', '.avi', '.mov', '.webm', '.wmv', '.flv', '.m4v'}
 
 
 @dataclass
@@ -66,13 +105,30 @@ class TranscriptionWorker(QThread):
     
     def run(self):
         """Run the transcription in a separate thread."""
+        temp_wav_path = None
         try:
             # Check if file exists
             if not os.path.isfile(self.filepath):
                 self.error.emit(f"File not found: {self.filepath}")
                 return
             
-            self.progress.emit(5, "Loading model (downloading if needed)...")
+            # Check if we need to convert the file
+            file_ext = os.path.splitext(self.filepath)[1].lower()
+            audio_path = self.filepath
+            
+            if file_ext in FORMATS_NEEDING_CONVERSION:
+                self.progress.emit(5, "Converting audio format...")
+                temp_wav_path = _convert_to_wav(self.filepath)
+                if temp_wav_path:
+                    audio_path = temp_wav_path
+                else:
+                    # FFmpeg not available or conversion failed, try direct
+                    self.progress.emit(5, "FFmpeg not found, trying direct transcription...")
+            
+            if self._cancelled.is_set():
+                return
+            
+            self.progress.emit(10, "Loading model (downloading if needed)...")
             
             # Load the model (will download if not present)
             models_dir = get_models_dir()
@@ -105,7 +161,7 @@ class TranscriptionWorker(QThread):
             
             # Run transcription
             self.progress.emit(20, "Transcribing audio...")
-            segments_raw = model.transcribe(self.filepath, **params)
+            segments_raw = model.transcribe(audio_path, **params)
             
             if self._cancelled.is_set():
                 return
@@ -144,6 +200,13 @@ class TranscriptionWorker(QThread):
             if 'CUDA' in error_msg or 'cuda' in error_msg:
                 error_msg += "\n\nTip: Try selecting CPU mode in settings."
             self.error.emit(error_msg)
+        finally:
+            # Clean up temporary WAV file
+            if temp_wav_path and os.path.exists(temp_wav_path):
+                try:
+                    os.remove(temp_wav_path)
+                except:
+                    pass
 
 
 class Transcriber:
