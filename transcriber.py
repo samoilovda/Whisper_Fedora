@@ -38,7 +38,7 @@ def _convert_to_wav(input_path: str) -> Optional[str]:
             '-ac', '1',       # Mono
             '-c:a', 'pcm_s16le',  # 16-bit PCM
             output_path
-        ], capture_output=True, text=True, timeout=300)
+        ], capture_output=True, text=True, timeout=3600)
         
         if result.returncode == 0 and os.path.exists(output_path):
             return output_path
@@ -122,8 +122,8 @@ class TranscriptionWorker(QThread):
                 if temp_wav_path:
                     audio_path = temp_wav_path
                 else:
-                    # FFmpeg not available or conversion failed, try direct
-                    self.progress.emit(5, "FFmpeg not found, trying direct transcription...")
+                    # FFmpeg not available or conversion failed, try direct if possible
+                    self.progress.emit(5, "Conversion failed or FFmpeg not found. Trying direct transcription (may fail)...")
             
             if self._cancelled.is_set():
                 return

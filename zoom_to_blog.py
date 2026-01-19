@@ -280,7 +280,7 @@ def extract_topics(transcription: str, lm_studio_url: str) -> Optional[dict]:
     """Extract topics from transcription using LM Studio."""
     print("🔍 Extracting topics...")
     
-    prompt = TOPIC_EXTRACTION_PROMPT.format(transcription=transcription[:15000])  # Limit length
+    prompt = TOPIC_EXTRACTION_PROMPT.format(transcription=transcription)  # Process full text
     response = call_lm_studio(prompt, lm_studio_url)
     
     if response:
@@ -310,7 +310,7 @@ def generate_blog_post(transcription: str, topics: dict, lm_studio_url: str) -> 
     prompt = BLOG_GENERATION_PROMPT.format(
         topics=", ".join(topics.get('topics', [])),
         insights="\n".join(f"- {i}" for i in topics.get('insights', [])),
-        transcription=transcription[:12000]  # Limit length
+        transcription=transcription  # Process full text
     )
     
     response = call_lm_studio(prompt, lm_studio_url)
