@@ -1,23 +1,106 @@
 """
 Whisper Fedora UI - Main Window
-Main application window with compact header-bar layout
+Main application window with compact header-bar layout and AI processing
 """
 
 import os
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QPushButton, QProgressBar, QLabel, QFileDialog, QMessageBox,
-    QApplication, QComboBox, QCheckBox
+    QApplication, QComboBox, QCheckBox, QTabWidget
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 
 from ui.file_selector import FileSelector
 from ui.transcript_view import TranscriptView
+from ui.ai_panel import AIProcessingPanel
+from ui.article_view import ArticleView, CleanedTextView
 from ui.icons import IconLabel, get_icon, IconColors
 from transcriber import Transcriber, TranscriptionResult
 from exporters import export_result, EXPORT_FORMATS
 from utils import WHISPER_MODELS, WHISPER_LANGUAGES, PERFORMANCE_MODES, detect_gpu, get_thread_count
 
+
+# ============================================================================
+# BACKGROUND WORKER FOR AI PROCESSING
+# ============================================================================
+
+class AIProcessingWorker(QThread):
+    """Background worker for AI processing tasks."""
+    
+    progress = pyqtSignal(int, str)  # percentage, message
+    finished = pyqtSignal(object)    # result object
+    error = pyqtSignal(str)          # error message
+    
+    def __init__(self, task: str, text: str, **kwargs):
+        super().__init__()
+        self.task = task
+        self.text = text
+        self.kwargs = kwargs
+        self._cancelled = False
+    
+    def run(self):
+        try:
+            if self.task == "clean":
+                self._run_clean()
+            elif self.task == "generate":
+                self._run_generate()
+            elif self.task == "generate_all":
+                self._run_generate_all()
+        except Exception as e:
+            self.error.emit(str(e))
+    
+    def cancel(self):
+        self._cancelled = True
+    
+    def _run_clean(self):
+        from text_processor import TextProcessor
+        
+        processor = TextProcessor()
+        
+        def on_progress(pct, msg):
+            if not self._cancelled:
+                self.progress.emit(pct, msg)
+        
+        result = processor.process(self.text, use_ai=True, on_progress=on_progress)
+        
+        if not self._cancelled:
+            self.finished.emit(result)
+    
+    def _run_generate(self):
+        from article_generator import ArticleGenerator, ArticleFormat
+        
+        generator = ArticleGenerator()
+        format_key = self.kwargs.get('format', 'blog')
+        format_enum = ArticleFormat(format_key)
+        
+        def on_progress(pct, msg):
+            if not self._cancelled:
+                self.progress.emit(pct, msg)
+        
+        article = generator.generate_article(self.text, format_enum, on_progress=on_progress)
+        
+        if not self._cancelled:
+            self.finished.emit(article)
+    
+    def _run_generate_all(self):
+        from article_generator import ArticleGenerator
+        
+        generator = ArticleGenerator()
+        
+        def on_progress(pct, msg):
+            if not self._cancelled:
+                self.progress.emit(pct, msg)
+        
+        result = generator.generate_all_formats(self.text, on_progress=on_progress)
+        
+        if not self._cancelled:
+            self.finished.emit(result)
+
+
+# ============================================================================
+# MAIN WINDOW
+# ============================================================================
 
 class MainWindow(QMainWindow):
     """Main application window with header-bar settings layout."""
@@ -26,6 +109,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.transcriber = Transcriber()
         self._current_result: TranscriptionResult | None = None
+        self._cleaned_text: str | None = None
+        self._ai_worker: AIProcessingWorker | None = None
         # Device toggle: True = use GPU (if available), False = force CPU
         self._use_gpu = True
         self._gpu_type, self._gpu_name = self.transcriber.gpu_type, self.transcriber.gpu_name
@@ -81,8 +166,8 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         """Set up the main window UI with header-bar layout."""
         self.setWindowTitle("Whisper UI")
-        self.setMinimumSize(900, 600)
-        self.resize(1100, 700)
+        self.setMinimumSize(1000, 650)
+        self.resize(1200, 750)
         
         # Central widget
         central = QWidget()
@@ -166,7 +251,7 @@ class MainWindow(QMainWindow):
         content_splitter.setHandleWidth(1)
         content_splitter.setStyleSheet("QSplitter::handle { background-color: #3a3a3a; }")
         
-        # Left: File selector
+        # Left: File selector and AI Panel
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 12, 0)
@@ -204,21 +289,61 @@ class MainWindow(QMainWindow):
         self.format_json.setStyleSheet(checkbox_style)
         left_layout.addWidget(self.format_json)
         
+        # AI Processing Panel
+        self.ai_panel = AIProcessingPanel()
+        left_layout.addWidget(self.ai_panel)
+        
         left_layout.addStretch()
         
         content_splitter.addWidget(left_panel)
         
-        # Right: Transcript view
+        # Right: Tabbed Content View
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(12, 0, 0, 0)
         right_layout.setSpacing(0)
         
+        # Create tabbed view for different content types
+        self.content_tabs = QTabWidget()
+        self.content_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: transparent;
+            }
+            QTabBar::tab {
+                background-color: #2a2a2a;
+                color: #888;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-size: 12px;
+            }
+            QTabBar::tab:selected {
+                background-color: #3a3a3a;
+                color: #e0e0e0;
+            }
+            QTabBar::tab:hover {
+                background-color: #333;
+            }
+        """)
+        
+        # Tab 1: Raw Transcription
         self.transcript_view = TranscriptView()
-        right_layout.addWidget(self.transcript_view)
+        self.content_tabs.addTab(self.transcript_view, "📝 Transcript")
+        
+        # Tab 2: Cleaned Text
+        self.cleaned_view = CleanedTextView()
+        self.content_tabs.addTab(self.cleaned_view, "✨ Cleaned")
+        
+        # Tab 3: Generated Articles
+        self.article_view = ArticleView()
+        self.content_tabs.addTab(self.article_view, "📚 Articles")
+        
+        right_layout.addWidget(self.content_tabs)
         
         content_splitter.addWidget(right_panel)
-        content_splitter.setSizes([350, 650])
+        content_splitter.setSizes([280, 720])
         
         main_layout.addWidget(content_splitter, stretch=1)
         
@@ -260,7 +385,7 @@ class MainWindow(QMainWindow):
             QPushButton:hover { border-color: #f87171; color: #f87171; }
         """)
         self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cancel_btn.clicked.connect(self._cancel_transcription)
+        self.cancel_btn.clicked.connect(self._cancel_operation)
         action_layout.addWidget(self.cancel_btn)
         
         # Transcribe button
@@ -284,6 +409,16 @@ class MainWindow(QMainWindow):
         self.file_selector.file_selected.connect(self._on_file_selected)
         self.transcript_view.copy_requested.connect(self._copy_to_clipboard)
         self.transcript_view.export_requested.connect(self._export_result)
+        
+        # AI Panel signals
+        self.ai_panel.clean_requested.connect(self._start_text_cleaning)
+        self.ai_panel.generate_requested.connect(self._start_article_generation)
+        self.ai_panel.generate_all_requested.connect(self._start_generate_all)
+        
+        # Article view signals
+        self.article_view.copy_done.connect(lambda: self.status_label.setText("Copied to clipboard"))
+        self.article_view.export_done.connect(lambda msg: self.status_label.setText(msg))
+        self.cleaned_view.copy_requested.connect(lambda: self.status_label.setText("Copied to clipboard"))
     
     def _toggle_device(self):
         """Toggle between GPU and CPU mode."""
@@ -365,6 +500,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.transcript_view.clear()
+        self.cleaned_view.clear()
+        self.article_view.clear()
+        self._cleaned_text = None
+        
+        # Disable AI panel during transcription
+        self.ai_panel.set_has_transcription(False)
         
         # Get settings from header controls
         model = self.model_combo.currentData()
@@ -387,11 +528,19 @@ class MainWindow(QMainWindow):
             on_error=self._on_error
         )
     
-    def _cancel_transcription(self):
-        """Cancel the current transcription."""
-        self.transcriber.cancel()
+    def _cancel_operation(self):
+        """Cancel the current operation (transcription or AI processing)."""
+        if self._ai_worker and self._ai_worker.isRunning():
+            self._ai_worker.cancel()
+            self._ai_worker.wait()
+            self._ai_worker = None
+            self.ai_panel.set_processing(False)
+            self.status_label.setText("AI processing cancelled")
+        else:
+            self.transcriber.cancel()
+            self.status_label.setText("Transcription cancelled")
+        
         self._reset_ui()
-        self.status_label.setText("Transcription cancelled")
     
     def _on_progress(self, percentage: int, message: str):
         """Handle progress updates."""
@@ -404,8 +553,14 @@ class MainWindow(QMainWindow):
         self.transcript_view.set_result(result)
         self._reset_ui()
         
+        # Enable AI panel now that we have a transcription
+        self.ai_panel.set_has_transcription(True)
+        
         word_count = len(result.full_text.split())
         self.status_label.setText(f"Complete - {word_count} words")
+        
+        # Switch to transcript tab
+        self.content_tabs.setCurrentIndex(0)
     
     def _on_error(self, error_message: str):
         """Handle transcription error."""
@@ -484,3 +639,137 @@ class MainWindow(QMainWindow):
                     except:
                         pass
                 self.status_label.setText(f"Exported {count} files")
+    
+    # ===== AI Processing Methods =====
+    
+    def _get_text_for_ai(self) -> str | None:
+        """Get text to use for AI processing (cleaned if available, else raw)."""
+        if self._cleaned_text:
+            return self._cleaned_text
+        if self._current_result:
+            return self._current_result.full_text
+        return None
+    
+    def _start_text_cleaning(self):
+        """Start text cleaning with AI."""
+        if not self._current_result:
+            self.status_label.setText("No transcription to clean")
+            return
+        
+        self.ai_panel.set_processing(True)
+        self.cancel_btn.setVisible(True)
+        self.transcribe_btn.setVisible(False)
+        
+        self._ai_worker = AIProcessingWorker("clean", self._current_result.full_text)
+        self._ai_worker.progress.connect(self._on_ai_progress)
+        self._ai_worker.finished.connect(self._on_clean_finished)
+        self._ai_worker.error.connect(self._on_ai_error)
+        self._ai_worker.start()
+    
+    def _start_article_generation(self, format_key: str):
+        """Start single article generation."""
+        text = self._get_text_for_ai()
+        if not text:
+            self.status_label.setText("No text to process")
+            return
+        
+        self.ai_panel.set_processing(True)
+        self.cancel_btn.setVisible(True)
+        self.transcribe_btn.setVisible(False)
+        
+        self._ai_worker = AIProcessingWorker("generate", text, format=format_key)
+        self._ai_worker.progress.connect(self._on_ai_progress)
+        self._ai_worker.finished.connect(self._on_generate_finished)
+        self._ai_worker.error.connect(self._on_ai_error)
+        self._ai_worker.start()
+    
+    def _start_generate_all(self):
+        """Start generation of all article formats."""
+        text = self._get_text_for_ai()
+        if not text:
+            self.status_label.setText("No text to process")
+            return
+        
+        self.ai_panel.set_processing(True)
+        self.cancel_btn.setVisible(True)
+        self.transcribe_btn.setVisible(False)
+        
+        self._ai_worker = AIProcessingWorker("generate_all", text)
+        self._ai_worker.progress.connect(self._on_ai_progress)
+        self._ai_worker.finished.connect(self._on_generate_all_finished)
+        self._ai_worker.error.connect(self._on_ai_error)
+        self._ai_worker.start()
+    
+    def _on_ai_progress(self, percentage: int, message: str):
+        """Handle AI processing progress."""
+        self.ai_panel.update_progress(percentage, message)
+        self.status_label.setText(message)
+    
+    def _on_clean_finished(self, result):
+        """Handle text cleaning completion."""
+        from text_processor import ProcessingResult
+        
+        self.ai_panel.set_processing(False)
+        self._reset_ui()
+        self._ai_worker = None
+        
+        if isinstance(result, ProcessingResult):
+            self._cleaned_text = result.coherent.text
+            
+            self.cleaned_view.set_text(
+                result.coherent.text,
+                original_length=len(result.original),
+                removed_fillers=result.cleaned.removed_fillers,
+                paragraphs=len(result.coherent.paragraphs)
+            )
+            
+            # Switch to cleaned tab
+            self.content_tabs.setCurrentIndex(1)
+            
+            self.status_label.setText(
+                f"Cleaned in {result.processing_time:.1f}s - "
+                f"removed {result.cleaned.removed_fillers} fillers"
+            )
+    
+    def _on_generate_finished(self, result):
+        """Handle single article generation completion."""
+        from article_generator import Article
+        
+        self.ai_panel.set_processing(False)
+        self._reset_ui()
+        self._ai_worker = None
+        
+        if isinstance(result, Article):
+            self.article_view.set_article(result)
+            
+            # Switch to articles tab
+            self.content_tabs.setCurrentIndex(2)
+            
+            self.status_label.setText(f"Generated: {result.title} ({result.word_count} words)")
+    
+    def _on_generate_all_finished(self, result):
+        """Handle all articles generation completion."""
+        from article_generator import GenerationResult
+        
+        self.ai_panel.set_processing(False)
+        self._reset_ui()
+        self._ai_worker = None
+        
+        if isinstance(result, GenerationResult):
+            self.article_view.set_articles(result.articles)
+            
+            # Switch to articles tab
+            self.content_tabs.setCurrentIndex(2)
+            
+            self.status_label.setText(
+                f"Generated {len(result.articles)} articles in {result.generation_time:.1f}s"
+            )
+    
+    def _on_ai_error(self, error_message: str):
+        """Handle AI processing error."""
+        self.ai_panel.set_processing(False)
+        self._reset_ui()
+        self._ai_worker = None
+        
+        self.status_label.setText(f"AI Error: {error_message[:50]}...")
+        QMessageBox.warning(self, "AI Processing Error", f"An error occurred:\n\n{error_message}")
